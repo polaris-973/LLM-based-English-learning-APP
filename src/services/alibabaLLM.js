@@ -12,84 +12,41 @@ const API_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
  */
 export const generateMultipleChoiceQuestions = async (knowledgePoint, count = 5) => {
   try {
-    // 设置超时时间为30秒
+    // 设置超时时间
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('API请求超时，请稍后再试')), 100000);
     });
     
-    // 使用axios直接调用阿里云灵积平台API
-    const apiPromise = axios.post(
-      `${API_BASE_URL}/chat/completions`,
-      {
-        model: "qwen-plus",
-        messages: [
-          { 
-            role: "system", 
-            content: `You are an English learning assistant. Generate ${count} multiple choice questions about the following English knowledge point. Each question should have EXACTLY 4 options (A, B, C, D) - one correct answer and three incorrect answers. Include the correct answer and a detailed explanation for each question. IMPORTANT: Format your response exactly as specified, with options as a simple array of strings.` 
-          },
-          { 
-            role: "user", 
-            content: `Knowledge point: "${knowledgePoint}"
-
-          Please format your response as a JSON object with the following structure:
-          {
-            "questions": [
-              {
-                "question": "Question text here",
-                "options": ["Option A", "Option B", "Option C", "Option D"],
-                "correctAnswer": 0,
-                "explanation": "Explanation text here"
-              },
-              ...more questions
-            ]
-          }
-
-          IMPORTANT REQUIREMENTS:
-          1. The “options” field must be a simple array of strings, must contain four options, and the number of options must be strictly equal to four..
-          2. You MUST provide 3 incorrect answers and 1 correct answer for each question.
-          3. Each option should be short and concise, without embedded explanations.
-          4. The correctAnswer should be the index (0-3) of the correct option.
-          5. Include exactly ${count} questions.
-          6. Do not include option labels (A, B, C, D) in the option text itself.
-          7. Make sure the options are distinct and meaningful alternatives.
-          8. Provide the specific and detailed explanation for every question.` 
-          }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    // 使用Vercel Serverless Function作为代理
+    const apiPromise = axios.post('/api/generate', {
+      type: 'multipleChoice',
+      knowledgePoint,
+      count
+    });
     
-    // 使用Promise.race在API请求和超时之间竞争
+    // 使用Promise.race来实现超时控制
     const response = await Promise.race([apiPromise, timeoutPromise]);
     
-    // 解析返回的JSON字符串
+    console.log("API Response:", response.data); // 添加调试日志
+    
     const responseContent = response.data.choices[0].message.content;
-    console.log("API Response:", responseContent); // 添加调试日志
+    console.log("Response Content:", responseContent); // 添加调试日志
     
     const parsedResponse = JSON.parse(responseContent);
     console.log("Parsed Response:", parsedResponse); // 添加调试日志
     
-    // 确保返回的是一个数组，并且每个问题的options是数组
     let questions = [];
     
     if (Array.isArray(parsedResponse.questions)) {
       questions = parsedResponse.questions;
     } else if (parsedResponse.questions) {
       console.warn("API返回的questions不是数组格式:", parsedResponse.questions);
-      // 如果questions存在但不是数组，尝试将其转换为数组
       if (typeof parsedResponse.questions === 'object') {
         questions = [parsedResponse.questions];
       }
     } else {
       console.warn("API返回的数据中没有questions字段:", parsedResponse);
-      // 尝试查找其他可能的字段名
+      // 尝试从返回的数据中找到可能的问题数组
       const possibleArrays = Object.values(parsedResponse).filter(val => Array.isArray(val));
       if (possibleArrays.length > 0) {
         questions = possibleArrays[0];
@@ -100,103 +57,65 @@ export const generateMultipleChoiceQuestions = async (knowledgePoint, count = 5)
       throw new Error('API返回的数据格式不正确，未能生成有效的选择题');
     }
     
-    // 记录原始问题数据，用于调试
-    console.log("处理前的问题数据:", JSON.stringify(questions, null, 2));
-    
-    // 确保每个问题的options是数组，并具有实际内容
-    const validatedQuestions = questions.map(question => {
-      // 深拷贝question对象，避免修改原始数据
-      const processedQuestion = { ...question };
+    // 处理每个问题的选项和正确答案
+    const processedQuestions = questions.map(question => {
+      // 提取选项
+      let options = [];
       
-      console.log(`处理问题: "${processedQuestion.question}"的选项:`, processedQuestion.options);
-      
-      // 从问题对象中提取所有可能的选项
-      let extractedOptions = [];
-      
-      // 特殊处理：从对象中提取所有可能的选项文本
-      // 基于观察到的API响应格式，选项可能以键值对形式存储
-      if (typeof processedQuestion.options === 'string') {
-        // 第一个选项可能是字符串形式的options属性
-        extractedOptions.push(processedQuestion.options);
+      if (Array.isArray(question.options)) {
+        options = question.options;
+      } else if (typeof question.options === 'object') {
+        // 如果options是对象，尝试从对象中提取选项
+        options = Object.values(question.options);
+      } else if (typeof question.options === 'string') {
+        // 如果options是字符串，尝试分割成数组
+        options = question.options.split(/[,;]/).map(opt => opt.trim());
       }
       
-      // 遍历对象的所有属性，寻找可能的选项
-      for (const key in processedQuestion) {
-        // 跳过常规属性
-        if (key === 'question' || key === 'correctAnswer' || key === 'explanation') {
-          continue;
-        }
-        
-        // 如果属性名看起来像选项文本，添加它
-        if (typeof key === 'string' && 
-            (key.includes('is ') || key.includes('are ') || 
-             key.includes('Eat') || key.includes('Base form') || 
-             key.includes('sun') || key.includes('She'))) {
-          extractedOptions.push(key);
-        }
-        
-        // 如果属性值是字符串且不是解释，也添加它
-        if (typeof processedQuestion[key] === 'string' && 
-            key !== 'options' && 
-            !processedQuestion[key].includes('Explanation') && 
-            processedQuestion[key].length < 100) {
-          extractedOptions.push(processedQuestion[key]);
-        }
+      // 确保有足够的选项
+      while (options.length < 4) {
+        options.push(`Option ${String.fromCharCode(65 + options.length)}`);
       }
       
-      // 移除重复项并限制为4个选项
-      extractedOptions = [...new Set(extractedOptions)].slice(0, 4);
+      // 限制选项数量为4个
+      options = options.slice(0, 4);
       
-      console.log("提取的选项:", extractedOptions);
+      // 处理正确答案
+      let correctAnswer = question.correctAnswer;
       
-      // 如果成功提取了选项，使用它们
-      if (extractedOptions.length >= 2) {
-        processedQuestion.options = extractedOptions;
-        console.log("使用提取的选项:", processedQuestion.options);
-      }
-      // 如果没有足够的选项，使用默认选项
-      else {
-        console.warn("无法提取足够的选项，使用默认选项");
-        processedQuestion.options = [
-          "She is reading a book now.",
-          "He writes a letter every day.",
-          "They watched TV last night.",
-          "We go to school yesterday."
-        ];
-      }
-      
-      // 确保correctAnswer是数字
-      if (typeof processedQuestion.correctAnswer !== 'number') {
-        if (typeof processedQuestion.correctAnswer === 'string') {
+      if (typeof correctAnswer !== 'number') {
+        if (typeof correctAnswer === 'string') {
           // 尝试将字符串转换为数字
-          const num = parseInt(processedQuestion.correctAnswer, 10);
-          if (!isNaN(num) && num >= 0 && num < processedQuestion.options.length) {
-            processedQuestion.correctAnswer = num;
+          const num = parseInt(correctAnswer, 10);
+          if (!isNaN(num) && num >= 0 && num < options.length) {
+            correctAnswer = num;
           } else {
-            // 如果是字母A-D，转换为0-3
-            const letter = processedQuestion.correctAnswer.trim().toUpperCase();
+            // 尝试将A/B/C/D转换为索引
+            const letter = correctAnswer.trim().toUpperCase();
             if (letter >= 'A' && letter <= 'D') {
-              processedQuestion.correctAnswer = letter.charCodeAt(0) - 'A'.charCodeAt(0);
+              correctAnswer = letter.charCodeAt(0) - 'A'.charCodeAt(0);
             } else {
-              processedQuestion.correctAnswer = 0; // 默认第一个选项
+              correctAnswer = 0; // 默认第一个选项
             }
           }
         } else {
-          processedQuestion.correctAnswer = 0; // 默认第一个选项
+          correctAnswer = 0; // 默认第一个选项
         }
       }
       
-      return processedQuestion;
+      // 确保correctAnswer在有效范围内
+      correctAnswer = Math.max(0, Math.min(correctAnswer, options.length - 1));
+      
+      return {
+        ...question,
+        options,
+        correctAnswer
+      };
     });
     
-    // 记录最终处理后的问题数据
-    console.log("处理后的问题数据:", JSON.stringify(validatedQuestions, null, 2));
-    
-    return validatedQuestions;
-    
+    return processedQuestions;
   } catch (error) {
-    console.error('Error calling Alibaba LLM API:', error);
-    // 不再使用模拟数据，而是直接抛出错误
+    console.error('Error calling API:', error);
     throw new Error(`生成选择题失败: ${error.message || '服务器响应超时或异常，请稍后再试'}`);
   }
 };
@@ -204,70 +123,26 @@ export const generateMultipleChoiceQuestions = async (knowledgePoint, count = 5)
 /**
  * Generate a gap fill exercise based on a knowledge point
  * @param {string} knowledgePoint - The English knowledge point provided by the user
- * @returns {Promise<Object>} - Gap fill exercise object
+ * @returns {Promise<Object>} - Object containing the exercise text, gaps, and explanation
  */
 export const generateGapFillExercise = async (knowledgePoint) => {
   try {
-    // 设置超时时间为30秒
+    // 设置超时时间
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('API请求超时，请稍后再试')), 100000);
     });
     
-    // 使用axios直接调用阿里云灵积平台API
-    const apiPromise = axios.post(
-      `${API_BASE_URL}/chat/completions`,
-      {
-        model: "qwen-turbo",
-        messages: [
-          { 
-            role: "system", 
-            content: "You are an English learning assistant specialized in creating contextual gap fill exercises that provide clear context clues." 
-          },
-          { 
-            role: "user", 
-            content: `Knowledge point: "${knowledgePoint}"
-
-Create a meaningful gap fill exercise with 5-7 gaps specifically related to this knowledge point. 
-
-IMPORTANT REQUIREMENTS:
-1. The text must be a coherent paragraph or dialogue that clearly demonstrates the knowledge point.
-2. Each gap should have sufficient context clues so students can reasonably determine the answer.
-3. Use the format "[GAP:answer]" to indicate each gap, where "answer" is the correct word or phrase.
-4. CRITICAL: Each gap must contain ONLY ONE WORD.
-5. Choose gaps that directly relate to the knowledge point (grammar structures, vocabulary, etc.).
-6. The exercise should be challenging but solvable based on the surrounding context.
-7. For grammar-related knowledge points:
-   - For tenses: Include the base form of the verb in parentheses after the gap, e.g., "He [GAP:went] (go) to school yesterday."
-   - For plurals: Include the singular form in parentheses, e.g., "There are many [GAP:children] (child) in the park."
-   - For other grammar points: Include appropriate hints in parentheses when needed.
-
-Example for "present continuous tense":
-"Right now, John [GAP:is] (be) studying for his exam while his sister [GAP:is] (be) watching TV. Their parents [GAP:are] (be) preparing dinner in the kitchen. Outside, children [GAP:are] (be) playing in the park, and the sun [GAP:is] (be) shining brightly."
-
-Please format your response as a JSON object with the following properties:
-- text: the text with [GAP:answer] placeholders and hints in parentheses
-- explanation: a detailed explanation of the exercise and why each answer is correct` 
-          }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    // 使用Vercel Serverless Function作为代理
+    const apiPromise = axios.post('/api/generate', {
+      type: 'gapFill',
+      knowledgePoint
+    });
     
-    // 使用Promise.race在API请求和超时之间竞争
+    // 使用Promise.race来实现超时控制
     const response = await Promise.race([apiPromise, timeoutPromise]);
     
-    // 解析返回的JSON字符串
     const responseContent = response.data.choices[0].message.content;
     const parsedResponse = JSON.parse(responseContent);
-    
-    // 处理返回的文本，提取gaps
     const processedExercise = processGapFillExercise(parsedResponse);
     
     if (!processedExercise.text || !processedExercise.gaps || processedExercise.gaps.length === 0) {
@@ -275,10 +150,8 @@ Please format your response as a JSON object with the following properties:
     }
     
     return processedExercise;
-    
   } catch (error) {
-    console.error('Error calling Alibaba LLM API:', error);
-    // 不再使用模拟数据，而是直接抛出错误
+    console.error('Error calling API:', error);
     throw new Error(`生成填空题失败: ${error.message || '服务器响应超时或异常，请稍后再试'}`);
   }
 };

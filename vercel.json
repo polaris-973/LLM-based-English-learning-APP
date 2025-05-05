@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "build" } },
+    { "src": "api/**/*.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "^/static/(.*)", "dest": "/static/$1" },
+    { "src": "^/favicon.ico", "dest": "/favicon.ico" },
+    { "src": "^/manifest.json", "dest": "/manifest.json" },
+    { "src": "^/asset-manifest.json", "dest": "/asset-manifest.json" },
+    { "src": "^/(.*).png", "dest": "/$1.png" },
+    { "src": "^/(.*).jpg", "dest": "/$1.jpg" },
+    { "src": "^/(.*).js", "dest": "/$1.js" },
+    { "src": "^/(.*).css", "dest": "/$1.css" },
+    { "src": "^/(.*)", "dest": "/index.html" }
+  ],
+  "env": {
+    "REACT_APP_DASHSCOPE_API_KEY": "@react_app_dashscope_api_key"
+  }
+}
