@@ -1,0 +1,119 @@
+.app-layout {
+  min-height: 100vh;
+}
+
+.app-header {
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  position: fixed;
+  width: 100%;
+  z-index: 1000;
+}
+
+.app-logo {
+  height: 40px;
+  margin-right: 16px;
+}
+
+.app-menu {
+  border-bottom: none;
+  line-height: 64px;
+}
+
+.app-content {
+  padding-top: 64px;
+  background-color: #f5f5f5;
+}
+
+.content-container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.app-footer {
+  text-align: center;
+  background: #fff;
+  border-top: 1px solid #e8e8e8;
+}
+
+/* Card styles */
+.app-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  margin-bottom: 24px;
+}
+
+/* Form styles */
+.knowledge-input {
+  margin-bottom: 24px;
+}
+
+.exercise-container {
+  margin-top: 24px;
+}
+
+.question-card {
+  margin-bottom: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.question-number {
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.explanation-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed #e8e8e8;
+}
+
+.correct-answer {
+  color: #52c41a;
+  font-weight: bold;
+}
+
+.incorrect-answer {
+  color: #f5222d;
+  font-weight: bold;
+}
+
+.gap-fill-container {
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.gap-input {
+  width: 120px;
+  margin: 0 4px;
+}
+
+/* Button styles */
+.action-button {
+  margin-right: 8px;
+}
+
+/* Home page styles */
+.feature-card {
+  height: 100%;
+  transition: all 0.3s;
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.feature-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .content-container {
+    padding: 16px;
+  }
+}
